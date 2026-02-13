@@ -322,3 +322,4 @@ These are patterns that should be flagged during code review:
 - Test both success and error paths using `ctx.succeeding()` and `ctx.failing()`
 - Pure utility classes and managers should have tests; handlers tested at integration level
 - Reference files: `src/test/java/com/teamhub/managers/ProjectManagerTest.java`, `src/test/java/com/teamhub/TestBase.java`
+
