@@ -35,22 +35,54 @@ public class AnalyticsManager {
     public Future<JsonObject> getDashboard(String organizationId) {
         return projectRepository.countByOrganization(organizationId).compose(projectCount ->
                 memberRepository.countByOrganization(organizationId).compose(memberCount ->
-                        analyticsRepository.getTaskCountsByStatus(organizationId).map(taskCounts -> {
-                            long totalTasks = 0;
-                            JsonObject statusCounts = new JsonObject();
-                            for (var tc : taskCounts) {
-                                String status = tc.getString("_id");
-                                long count = tc.getLong("count", 0L);
-                                statusCounts.put(status, count);
-                                totalTasks += count;
-                            }
+                        analyticsRepository.getTaskCountsByStatus(organizationId).compose(statusCounts ->
+                                analyticsRepository.getTaskCountsByPriority(organizationId).compose(priorityCounts ->
+                                        analyticsRepository.getRecentTaskActivity(organizationId, 10).map(recentTasks -> {
+                                            long totalTasks = 0;
+                                            long tasksCompleted = 0;
+                                            JsonObject byStatus = new JsonObject();
+                                            for (var tc : statusCounts) {
+                                                String status = tc.getString("_id");
+                                                long count = tc.getLong("count", 0L);
+                                                byStatus.put(status, count);
+                                                totalTasks += count;
+                                                if ("DONE".equals(status)) tasksCompleted = count;
+                                            }
 
-                            return new JsonObject()
-                                    .put("projects", projectCount)
-                                    .put("members", memberCount)
-                                    .put("totalTasks", totalTasks)
-                                    .put("tasksByStatus", statusCounts);
-                        })
+                                            JsonObject byPriority = new JsonObject();
+                                            for (var pc : priorityCounts) {
+                                                String priority = pc.getString("_id");
+                                                long count = pc.getLong("count", 0L);
+                                                if (priority != null) byPriority.put(priority, count);
+                                            }
+
+                                            JsonArray activity = new JsonArray();
+                                            for (var task : recentTasks) {
+                                                String status = task.getString("status", "");
+                                                String type = "DONE".equals(status) ? "task_completed" : "task_created";
+                                                String title = task.getString("title", "Untitled");
+                                                String actorId = task.getString("createdBy", "");
+                                                activity.add(new JsonObject()
+                                                        .put("id", task.getString("_id"))
+                                                        .put("type", type)
+                                                        .put("description", "DONE".equals(status)
+                                                                ? "Completed task: " + title
+                                                                : "Created task: " + title)
+                                                        .put("actorName", actorId)
+                                                        .put("createdAt", task.getString("updatedAt", "")));
+                                            }
+
+                                            return new JsonObject()
+                                                    .put("totalProjects", projectCount)
+                                                    .put("totalMembers", memberCount)
+                                                    .put("totalTasks", totalTasks)
+                                                    .put("tasksCompleted", tasksCompleted)
+                                                    .put("tasksByStatus", byStatus)
+                                                    .put("tasksByPriority", byPriority)
+                                                    .put("recentActivity", activity);
+                                        })
+                                )
+                        )
                 )
         );
     }

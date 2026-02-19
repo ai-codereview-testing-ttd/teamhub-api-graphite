@@ -39,6 +39,53 @@ public class AnalyticsRepository {
     }
 
     /**
+     * Aggregates task counts grouped by priority for a given organization's projects.
+     */
+    public Future<List<JsonObject>> getTaskCountsByPriority(String organizationId) {
+        JsonArray pipeline = new JsonArray()
+                .add(new JsonObject().put("$lookup", new JsonObject()
+                        .put("from", "projects")
+                        .put("localField", "projectId")
+                        .put("foreignField", "_id")
+                        .put("as", "project")))
+                .add(new JsonObject().put("$unwind", "$project"))
+                .add(new JsonObject().put("$match", new JsonObject()
+                        .put("project.organizationId", organizationId)
+                        .put("deletedAt", (Object) null)))
+                .add(new JsonObject().put("$group", new JsonObject()
+                        .put("_id", "$priority")
+                        .put("count", new JsonObject().put("$sum", 1))));
+
+        return collectAggregate("tasks", pipeline);
+    }
+
+    /**
+     * Fetches the most recently created/updated tasks as activity items.
+     */
+    public Future<List<JsonObject>> getRecentTaskActivity(String organizationId, int limit) {
+        JsonArray pipeline = new JsonArray()
+                .add(new JsonObject().put("$lookup", new JsonObject()
+                        .put("from", "projects")
+                        .put("localField", "projectId")
+                        .put("foreignField", "_id")
+                        .put("as", "project")))
+                .add(new JsonObject().put("$unwind", "$project"))
+                .add(new JsonObject().put("$match", new JsonObject()
+                        .put("project.organizationId", organizationId)
+                        .put("deletedAt", (Object) null)))
+                .add(new JsonObject().put("$sort", new JsonObject().put("updatedAt", -1)))
+                .add(new JsonObject().put("$limit", limit))
+                .add(new JsonObject().put("$project", new JsonObject()
+                        .put("_id", 1)
+                        .put("title", 1)
+                        .put("status", 1)
+                        .put("createdBy", 1)
+                        .put("updatedAt", 1)));
+
+        return collectAggregate("tasks", pipeline);
+    }
+
+    /**
      * Aggregates project activity: counts of tasks per project.
      */
     public Future<List<JsonObject>> getProjectActivity(String organizationId) {
